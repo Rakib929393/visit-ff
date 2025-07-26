@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import aiohttp
 import asyncio
 import json
@@ -60,7 +60,7 @@ async def send_until_200_success(tokens, uid, server_name, target_success=200):
         data = bytes.fromhex(encrypted)
 
         while total_success < target_success:
-            batch_size = min(target_success - total_success, 200)  # Send max 200 or remaining needed
+            batch_size = min(target_success - total_success, 200)
             tasks = [
                 asyncio.create_task(visit(session, url, tokens[(total_sent + i) % len(tokens)], uid, data))
                 for i in range(batch_size)
@@ -74,13 +74,20 @@ async def send_until_200_success(tokens, uid, server_name, target_success=200):
 
     return total_success, total_sent
 
-@app.route('/<string:server>/<int:uid>', methods=['GET'])
-def send_visits(server, uid):
-    server = server.upper()
-    tokens = load_tokens(server)
+# ✅ New route with query parameter support
+@app.route('/', methods=['GET'])
+def send_visits():
+    server = request.args.get('server', '').upper()
+    uid = request.args.get('uid', '')
 
+    if not server or not uid.isdigit():
+        return jsonify({"message": "❌ Missing or invalid parameters. Use ?server=BR&uid=123456789"}), 400
+
+    tokens = load_tokens(server)
     if not tokens:
         return jsonify({"message": "❌ No valid tokens found"}), 500
+
+    uid = int(uid)
 
     print(f"🚀 Sending visits to UID: {uid} using {len(tokens)}")
     print("Waiting for total 200 successful visits...")
